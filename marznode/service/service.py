@@ -126,13 +126,30 @@ class MarzService(MarzServiceBase):
         stream: Stream[UsersData, Empty],
     ) -> None:
         users_data = (await stream.recv_message()).users_data
+
+        # مرحله ۱: پاک کردن همه‌ی یوزرهای فعلی از inbounds
+        for backend in self._backends.values():
+            for inbound in backend.list_inbounds():
+                try:
+                    await backend.clear_inbound_users(inbound.tag)
+                    logger.info(f"Cleared users from inbound {inbound.tag}")
+                except Exception as e:
+                    logger.error(f"Failed to clear users from inbound {inbound.tag}: {e}")
+
+        # مرحله ۲: دوباره اضافه کردن یوزرها از دیتابیس
         for user_data in users_data:
-            await self._update_user(user_data)
+            try:
+                await self._update_user(user_data)
+            except Exception as e:
+                logger.error(f"Failed to repopulate user {user_data.user.username}: {e}")
+
+        # مرحله ۳: حذف یوزرهایی که توی دیتابیس نبودن
         user_ids = {user_data.user.id for user_data in users_data}
         for storage_user in await self._storage.list_users():
             if storage_user.id not in user_ids:
                 await self._remove_user(storage_user, storage_user.inbounds)
                 await self._storage.remove_user(storage_user)
+
         await stream.send_message(Empty())
 
     async def FetchUsersStats(self, stream: Stream[Empty, UsersStats]) -> None:
