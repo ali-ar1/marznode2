@@ -10,14 +10,6 @@ from .types.account import Account
 from .types.message import Message, TypedMessage
 
 
-# pylint: disable=E1101
-
-# try:
-#    from .proto.core import config_pb2 as core_config_pb2
-# except ModuleNotFoundError:
-#    from .proto import config_pb2 as core_config_pb2
-
-
 class Proxyman(XrayAPIBase):
     """Implements methods to update Xray-core users/inbounds"""
 
@@ -49,4 +41,16 @@ class Proxyman(XrayAPIBase):
             tag=tag, operation=Message(command_pb2.RemoveUserOperation(email=email))
         )
 
-    # TODO: implement add/remove inbound/outbound if necessary
+    async def list_inbound_users(self, tag: str):
+        """
+        Returns list of users currently attached to an inbound from Xray-core.
+        """
+        stub = command_grpc.HandlerServiceStub(self._channel)
+        try:
+            resp = await stub.GetInboundUserStats(
+                command_pb2.GetInboundUserStatsRequest(tag=tag)
+            )
+            # resp.user_stats = [User(email=..., ...)]
+            return [user.email for user in resp.user_stats]
+        except grpclib.exceptions.GRPCError as error:
+            raise RelatedError(error) from error
