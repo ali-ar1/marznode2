@@ -106,7 +106,6 @@ class XrayBackend(VPNBackend):
         self._inbounds = set()
 
     async def restart(self, backend_config: str | None) -> list[Inbound] | None:
-        # xray_config = backend_config if backend_config else self._config
         await self._restart_lock.acquire()
         try:
             if not backend_config:
@@ -147,11 +146,11 @@ class XrayBackend(VPNBackend):
     async def clear_inbound_users(self, tag: str):
         """
         Remove all users from a given inbound (used for RepopulateUsers reset).
+        Uses Xray API directly to avoid ghost users.
         """
         try:
-            users = await self._storage.list_inbound_users(tag)
-            for user in users:
-                email = f"{user.id}.{user.username}"
+            emails = await self._api.list_inbound_users(tag)
+            for email in emails:
                 try:
                     await self._api.remove_inbound_user(tag, email)
                     logger.info(f"Removed user {email} from inbound {tag}")
