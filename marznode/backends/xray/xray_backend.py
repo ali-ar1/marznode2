@@ -120,7 +120,7 @@ class XrayBackend(VPNBackend):
         email = f"{user.id}.{user.username}"
 
         account_class = accounts_map[inbound.protocol]
-        flow = inbound.config["flow"] or ""
+        flow = inbound.config.get("flow", "") or ""
         logger.debug(flow)
         user_account = account_class(
             email=email,
@@ -143,6 +143,24 @@ class XrayBackend(VPNBackend):
             raise
         except OSError:
             logger.warning("user removal requested when xray api is down")
+
+    async def clear_inbound_users(self, tag: str):
+        """
+        Remove all users from a given inbound (used for RepopulateUsers reset).
+        """
+        try:
+            users = await self._storage.list_inbound_users(tag)
+            for user in users:
+                email = f"{user.id}.{user.username}"
+                try:
+                    await self._api.remove_inbound_user(tag, email)
+                    logger.info(f"Removed user {email} from inbound {tag}")
+                except EmailNotFoundError:
+                    logger.debug(f"User {email} not found in inbound {tag}, skipping")
+                except Exception as e:
+                    logger.error(f"Failed to remove user {email} from {tag}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to clear inbound {tag}: {e}")
 
     async def get_usages(self, reset: bool = True) -> dict[int, int]:
         try:
